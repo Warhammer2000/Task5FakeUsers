@@ -1,0 +1,180 @@
+﻿@page
+@model IndexModel
+@{
+	ViewData["Title"] = "Home page";
+}
+
+<div class="text-center">
+	<h1 class="display-4">Fake User Data Generator</h1>
+
+	<form method="post">
+		<div class="form-group">
+			<label for="region">Регион:</label>
+			@Html.Raw(Model.GetRegionsSelectHtml())
+		</div>
+
+		<div class="form-group">
+			<label for="errorsSlider">Number of Errors:</label>
+			<input type="range" id="errorsSlider" name="Errors" min="0" max="1000" step="0.25" value="@Model.Errors" oninput="updateTextInput(this.value);">
+			<input type="text" id="errorsInput" value="@Model.Errors" onchange="updateSliderInput(this.value);" style="width: 50px;">
+		</div>
+
+		<form method="post">
+			<div class="form-group">
+				<label for="seed">Seed:</label>
+				<input type="text" id="seed" name="Seed" value="@Model.Seed" required pattern="\S+.*" title="This field cannot be empty." />
+				<button type="button" onclick="generateRandomSeed()">Random</button>
+			</div>
+			<button type="submit">Generate</button>
+		</form>
+	</form>
+	<div class="data-container">
+
+		<button onclick="liveexportcsv()">Export to CSV </button>
+
+		<table class="table" id="usersTable">
+			<thead>
+				<tr>
+					<th>Number</th>
+					<th>Identifier</th>
+					<th>Full Name</th>
+					<th>Address</th>
+					<th>Phone Number</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var user in Model.FakeUsers)
+				{
+					<tr>
+						<td>@user.Number</td>
+						<td>@user.Identifier</td>
+						<td>@user.FullName</td>
+						<td>@user.Address</td>
+						<td>@user.PhoneNumber</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+</div>
+
+@section Scripts {
+	<script src="js/jquery-3.7.1.min.js"></script>
+	<script src="js/tableToCsv.min.js"></script>
+
+	<script>
+
+
+		let isLoading = false;
+		let pageNumber = 1;
+		let currentNumber = document.getElementById('usersTable').getElementsByTagName('tbody')[0].rows.length;
+		const seed = '@Model.Seed';
+		const pageSize = 20;
+		const region = document.getElementById('region').value;
+		const errors = document.getElementById('errorsInput').value;
+		console.log("seed now is " + seed);
+		window.onscroll = function () {
+			if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100) {
+				if (!isLoading) {
+					isLoading = true;
+					loadMoreData();
+				}
+			}
+		};
+
+
+		document.addEventListener('DOMContentLoaded', function () {
+			var seedInput = document.getElementById('seed');
+			var savedSeed = localStorage.getItem('seed');
+			if (savedSeed && !seedInput.value) {
+				seedInput.value = savedSeed;
+			}
+		});
+
+		function saveSeed() {
+			const seedInput = document.getElementById('seed');
+			localStorage.setItem('seed', seedInput.value);
+		}
+
+		function loadMoreData() {
+			const seed = document.getElementById('seed').value;
+			console.log("seed now is " + seed);
+			if (!seed) {
+				console.error('Seed value is required.');
+				return;
+			}
+
+			const baseURL = 'https://webappfakeusers.azurewebsites.net';
+
+			const url = `${baseURL}/Index?handler=MoreData&pageNumber=${encodeURIComponent(pageNumber)}&seed=${encodeURIComponent(seed)}&pageSize=${encodeURIComponent(pageSize)}&region=${encodeURIComponent(region)}&errors=${encodeURIComponent(errors)}`;
+
+			fetch(url)
+				.then(response => {
+					if (!response.ok) {
+						throw new Error('Server responded with a status: ' + response.status);
+					}
+					return response.json();
+				})
+				.then(data => {
+					appendDataToTable(data);
+					console.log(data);
+					console.log(currentNumber);
+					isLoading = false;
+				})
+				.catch(error => {
+					console.error('Error loading more data:', error);
+					isLoading = false;
+				});
+		}
+
+		function appendDataToTable(users) {
+			const tableBody = document.getElementById('usersTable').getElementsByTagName('tbody')[0];
+
+			users.forEach(user => {
+				currentNumber++;
+				console.log(currentNumber);
+				const tr = document.createElement('tr');
+				tr.innerHTML = `
+													<td>${currentNumber}</td>
+													<td>${user.identifier}</td>
+													<td>${user.fullName}</td>
+													<td>${user.address}</td>
+													<td>${user.phoneNumber}</td>
+												`;
+				tableBody.appendChild(tr);
+			});
+		}
+		function appendDataToPage(data) {
+			const container = document.getElementById('data-container');
+			data.forEach(user => {
+				const userElement = document.createElement('div');
+				userElement.textContent = `Name: ${user.FullName}, Address: ${user.Address}`;
+				container.appendChild(userElement);
+			});
+		}
+
+		function generateRandomSeed() {
+			const seedInput = document.getElementById('seed');
+			seedInput.value = Math.random().toString(36).substr(2, 9);
+			localStorage.setItem('seed', seedInput.value);
+		}
+
+
+		function updateTextInput(value) {
+			document.getElementById('errorsInput').value = value;
+		}
+
+		function updateSliderInput(value) {
+			var slider = document.getElementById('errorsSlider');
+			var validatedValue = Math.max(slider.min, Math.min(slider.max, parseFloat(value)));
+			slider.value = validatedValue;
+			document.getElementById('errorsInput').value = validatedValue;
+		}
+		function liveexportcsv() {
+			$("#usersTable").tableToCsv({
+				filename: 'paakinfoemplist'
+			});
+		}
+
+	</script>
+}
